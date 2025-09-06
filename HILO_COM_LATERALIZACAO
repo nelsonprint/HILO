@@ -1,0 +1,102 @@
+// ==========================================
+// RENKO 6p + HILO + Alvo/Stop + ANTILATERALIZAÇÃO
+// Mini Índice B3
+// ==========================================
+
+// ----- Inputs -----
+input
+  VMedC(9);            // média curta
+  VMedL(20);           // média longa
+  Stop(180);           // stop em pontos (~3 blocos Renko de 60 pts)
+  Alvo(2.0);           // alvo em múltiplos do stop (~6 blocos)
+  periodoHILO(6);      // período do HILO
+  AfastPts(40);        // afastamento mínimo do preço em relação às médias
+  InclinacaoPts(20);   // inclinação mínima da média longa
+
+// ----- Variáveis -----
+var
+  rHILO: float;
+  vMediaCurta, vMediaLonga: float;
+  vCor: integer;
+  DistAtual, DistPassada: float;
+
+// ==========================================
+// INÍCIO
+// ==========================================
+Inicio
+
+  // --- HILO ---
+  rHILO := HiloActivator(periodoHILO) |1|;
+
+  // --- Médias para ANTILATERALIZAÇÃO ---
+  vMediaCurta := MediaExp(VMedC, Close);
+  vMediaLonga := MediaExp(VMedL, Close);
+
+  // --- Verificação de afastamento, inclinação e divergência crescente ---
+  if BarCount > 8 then
+  begin
+    DistAtual   := abs(vMediaCurta - vMediaLonga);
+    DistPassada := abs(vMediaCurta[5] - vMediaLonga[5]);
+
+    // Compra: preço acima + inclinação positiva + médias se abrindo
+    if (Close > vMediaCurta + AfastPts) and (Close > vMediaLonga + AfastPts) and
+       (vMediaLonga > vMediaLonga[5] + InclinacaoPts) and
+       (DistAtual > DistPassada) then
+      vCor := clGreen
+
+    // Venda: preço abaixo + inclinação negativa + médias se abrindo
+    else if (Close < vMediaCurta - AfastPts) and (Close < vMediaLonga - AfastPts) and
+            (vMediaLonga < vMediaLonga[5] - InclinacaoPts) and
+            (DistAtual > DistPassada) then
+      vCor := clRed
+    else
+      vCor := clGray;
+  end
+  else
+    vCor := clGray;
+
+  // --- Visualizações ---
+  PaintBar(vCor);
+  Plot(vMediaCurta);
+  Plot2(vMediaLonga);
+
+  // ==========================================
+  // CONTROLE DE POSIÇÃO (Stops e Alvos)
+  // ==========================================
+  Se (IsBought) entao
+  Inicio
+    // stop da compra
+    SellToCoverStop(BuyPrice - Stop, BuyPrice - Stop - 100);
+    // alvo da compra
+    SellToCoverLimit(BuyPrice + (Alvo * Stop), 1);
+  fim;
+
+  Se (IsSold) entao
+  Inicio
+    // stop da venda
+    BuyToCoverStop(SellPrice + Stop, SellPrice + Stop + 100);
+    // alvo da venda
+    BuyToCoverLimit(SellPrice - (Alvo * Stop), 1);
+  fim;
+
+  // ==========================================
+  // ENTRADAS
+  // ==========================================
+  Se (BuyPosition = 0) e (SellPosition = 0) entao // verifica se existe posição
+  Inicio
+    // Compra só se antilateralização estiver verde
+    Se (Fechamento > Fechamento[1]) e (Fechamento[1] < Fechamento[2]) e 
+       (rHILO = 1) e (vCor = clGreen) entao
+    Inicio
+      BuyAtMarket;
+    fim;
+
+    // Venda só se antilateralização estiver vermelha
+    Se (Fechamento < Fechamento[1]) e (Fechamento[1] > Fechamento[2]) e 
+       (rHILO = 0) e (vCor = clRed) entao
+    Inicio
+      SellShortAtMarket;
+    fim;
+  fim;
+
+fim;
