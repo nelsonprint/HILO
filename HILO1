@@ -1,0 +1,47 @@
+input
+VMedC(9);
+VMedL(20);
+Stop(100);
+Alvo(1.0);
+periodoHILO (6);
+
+var
+rHILO : Float;
+
+  Inicio
+  rHILO  := HiloActivator (periodoHILO) |1|; 
+
+    Se (IsBought ) entao
+    Inicio
+    // stop da compra
+    SellToCoverStop (BuyPrice-stop, BuyPrice-stop-100);
+    // alvo da compra
+    SellToCoverLimit(BuyPrice+(Alvo*Stop), 1);
+    fim   ;
+
+    Se(IsSold) entao
+    Inicio
+    //stop da venda
+    BuyToCoverStop (SellPrice + Stop, SellPrice + Stop+100);
+    //alvo da venda
+    Buytocoverlimit(Sellprice-(Alvo*Stop),1);
+    
+    fim;
+
+    SE (BuyPosition = 0) e (SellPosition=0) entao // verifica se existe posição
+    Inicio
+    
+    Se (Fechamento > Fechamento [1]) e (Fechamento[1] < Fechamento[2] ) e (rHILO = 1) entao
+    Inicio
+    Buyatmarket;
+    fim;
+    
+    Se (Fechamento < Fechamento [1]) e (Fechamento[1] > Fechamento[2] )e (rHILO = 0) entao
+    Inicio
+    SellShortAtMarket;
+     
+    
+    fim;
+
+    fim;
+    fim;
