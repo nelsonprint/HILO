@@ -1,0 +1,104 @@
+// ==========================================
+// RENKO 6p + HILO + Alvo/Stop + ANTILATERALIZAÇÃO
+// Mini Índice B3 (reanálise completa antes de entrar)
+// ==========================================
+
+// ----- Inputs -----
+input
+  VMedC(9);            // média curta
+  VMedL(20);           // média longa
+  Stop(180);           // stop em pontos (~3 blocos Renko de 60 pts)
+  Alvo(2.0);           // alvo em múltiplos do stop (~6 blocos)
+  periodoHILO(6);      // período do HILO
+  AfastPts(40);        // afastamento mínimo do preço em relação às médias
+  InclinacaoPts(20);   // inclinação mínima da média longa
+  DistMin(20);         // distância mínima entre médias para entrada
+  BloqEntradas(20);    // mínimo de blocos entre entradas consecutivas
+
+// ----- Variáveis -----
+var
+  rHILO: float;
+  vMediaCurta, vMediaLonga: float;
+  vCor: integer;
+  DistAtual, DistPassada, InclCurta: float;
+  UltEntradaBar: integer;
+
+// ==========================================
+// INÍCIO
+// ==========================================
+Inicio
+
+  // --- HILO ---
+  rHILO := HiloActivator(periodoHILO) |1|;
+
+  // --- Médias para ANTILATERALIZAÇÃO ---
+  vMediaCurta := MediaExp(VMedC, Close);
+  vMediaLonga := MediaExp(VMedL, Close);
+
+  // --- Reanálise completa do mercado ---
+  if BarCount > 8 then
+  begin
+    DistAtual   := abs(vMediaCurta - vMediaLonga);
+    DistPassada := abs(vMediaCurta[5] - vMediaLonga[5]);
+    InclCurta   := vMediaCurta - vMediaCurta[2];
+
+    // Compra
+    if (Close > vMediaCurta + AfastPts) and (Close > vMediaLonga + AfastPts) and
+       (vMediaLonga > vMediaLonga[5] + InclinacaoPts) and
+       (DistAtual > DistPassada) and (DistAtual > DistMin) and (InclCurta > 0) then
+      vCor := clGreen
+
+    // Venda
+    else if (Close < vMediaCurta - AfastPts) and (Close < vMediaLonga - AfastPts) and
+            (vMediaLonga < vMediaLonga[5] - InclinacaoPts) and
+            (DistAtual > DistPassada) and (DistAtual > DistMin) and (InclCurta < 0) then
+      vCor := clRed
+    else
+      vCor := clGray;
+  end
+  else
+    vCor := clGray;
+
+  // --- Visualizações ---
+  PaintBar(vCor);
+  Plot(vMediaCurta);
+  Plot2(vMediaLonga);
+
+  // ==========================================
+  // CONTROLE DE POSIÇÃO (Stops e Alvos)
+  // ==========================================
+  Se (IsBought) entao
+  Inicio
+    SellToCoverStop(BuyPrice - Stop, BuyPrice - Stop - 100);
+    SellToCoverLimit(BuyPrice + (Alvo * Stop), 1);
+  fim;
+
+  Se (IsSold) entao
+  Inicio
+    BuyToCoverStop(SellPrice + Stop, SellPrice + Stop + 100);
+    BuyToCoverLimit(SellPrice - (Alvo * Stop), 1);
+  fim;
+
+  // ==========================================
+  // ENTRADAS (reanálise completa)
+  // ==========================================
+  Se (BuyPosition = 0) e (SellPosition = 0) e ((BarCount - UltEntradaBar) >= BloqEntradas) entao
+  Inicio
+    // Compra
+    if (Fechamento > Fechamento[1]) and (Fechamento[1] < Fechamento[2]) and
+       (rHILO = 1) and (vCor = clGreen) then
+    Inicio
+      BuyAtMarket;
+      UltEntradaBar := BarCount;
+    fim;
+
+    // Venda
+    if (Fechamento < Fechamento[1]) and (Fechamento[1] > Fechamento[2]) and
+       (rHILO = 0) and (vCor = clRed) then
+    Inicio
+      SellShortAtMarket;
+      UltEntradaBar := BarCount;
+    fim;
+  fim;
+
+fim;
